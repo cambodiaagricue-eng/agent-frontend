@@ -25,6 +25,7 @@ export function SessionBootstrap() {
     }
 
     inFlight.current = true;
+    let cancelled = false;
 
     const run = async () => {
       try {
@@ -43,16 +44,28 @@ export function SessionBootstrap() {
         if (user.role !== "agent") {
           throw new Error("This portal is only for agent accounts.");
         }
+        if (cancelled) {
+          return;
+        }
         login(user, token);
       } catch {
-        logout();
+        if (!cancelled) {
+          logout();
+        }
       } finally {
-        setSessionChecked(true);
+        if (!cancelled) {
+          setSessionChecked(true);
+        }
         inFlight.current = false;
       }
     };
 
     void run();
+
+    return () => {
+      cancelled = true;
+      inFlight.current = false;
+    };
   }, [accessToken, hydrated, isAuthenticated, login, logout, setSessionChecked]);
 
   return null;

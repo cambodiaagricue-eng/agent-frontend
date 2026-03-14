@@ -6,6 +6,49 @@ import type { User } from "./types";
 import { mockConversations } from "./mock-data";
 import type { ChatConversation, ChatMessage } from "./types";
 
+type SafeStorage = {
+  getItem: (name: string) => string | null;
+  setItem: (name: string, value: string) => void;
+  removeItem: (name: string) => void;
+};
+
+function createSafeStorage(): SafeStorage {
+  return {
+    getItem: (name) => {
+      if (typeof window === "undefined") {
+        return null;
+      }
+      try {
+        return window.localStorage.getItem(name);
+      } catch {
+        return null;
+      }
+    },
+    setItem: (name, value) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      try {
+        window.localStorage.setItem(name, value);
+      } catch {
+        // Ignore storage quota/private mode failures.
+      }
+    },
+    removeItem: (name) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      try {
+        window.localStorage.removeItem(name);
+      } catch {
+        // Ignore storage failures.
+      }
+    },
+  };
+}
+
+const safeStorage = createJSONStorage(() => createSafeStorage());
+
 interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -15,7 +58,7 @@ interface AuthState {
   login: (user: User, accessToken: string) => void;
   setHydrated: (value: boolean) => void;
   setSessionChecked: (value: boolean) => void;
-  updateUser: (user: User) => void;
+  updateUser: (user: Partial<User>) => void;
   logout: () => void;
 }
 
@@ -36,7 +79,10 @@ export const useAuthStore = create<AuthState>()(
         }),
       setHydrated: (value) => set({ hydrated: value }),
       setSessionChecked: (value) => set({ sessionChecked: value }),
-      updateUser: (user) => set({ user }),
+      updateUser: (user) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...user } : (user as User),
+        })),
       logout: () =>
         set({
           user: null,
@@ -47,7 +93,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "mayura-auth",
-      storage: createJSONStorage(() => localStorage),
+      storage: safeStorage,
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
@@ -108,7 +154,7 @@ export const useChatStore = create<ChatState>()(
           ),
         })),
       createConversation: (title) => {
-        const id = `c${Date.now()}`;
+        const id = `c${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const now = new Date().toISOString();
         set((state) => ({
           conversations: [
@@ -135,7 +181,7 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: "mayura-chat",
-      storage: createJSONStorage(() => localStorage),
+      storage: safeStorage,
       partialize: (state) => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,

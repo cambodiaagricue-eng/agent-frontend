@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, FileBadge2, Upload, UserPlus } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { GlassCard, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/lib/store";
-import { agentOnboardFarmer } from "@/lib/auth-api";
+import { agentOnboardFarmer, listAgentFarmers, type AgentFarmerRow } from "@/lib/auth-api";
 
 export default function AgentDashboardPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -29,6 +29,8 @@ export default function AgentDashboardPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [farmers, setFarmers] = useState<AgentFarmerRow[]>([]);
+  const [isFarmersLoading, setIsFarmersLoading] = useState(true);
 
   const canSubmit =
     Boolean(form.username.trim()) &&
@@ -39,6 +41,35 @@ export default function AgentDashboardPage() {
     Boolean(selfie) &&
     Boolean(govId) &&
     landDocuments.length > 0;
+
+  const loadFarmers = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+
+    setIsFarmersLoading(true);
+    try {
+      const response = await listAgentFarmers(accessToken);
+      setFarmers(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load your farmers.");
+    } finally {
+      setIsFarmersLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    void loadFarmers();
+  }, [loadFarmers]);
+
+  const farmerSummary = useMemo(
+    () => ({
+      total: farmers.length,
+      pending: farmers.filter((farmer) => farmer.agentCreatedPendingApproval).length,
+      active: farmers.filter((farmer) => farmer.isActive).length,
+    }),
+    [farmers],
+  );
 
   const submit = async () => {
     if (!accessToken || !selfie || !govId || landDocuments.length === 0) {
@@ -72,6 +103,7 @@ export default function AgentDashboardPage() {
       setSelfie(null);
       setGovId(null);
       setLandDocuments([]);
+      await loadFarmers();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to submit farmer onboarding.");
     } finally {
@@ -127,6 +159,12 @@ export default function AgentDashboardPage() {
               </GlassCard>
             );
           })}
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <MetricCard label="Farmers onboarded" value={String(farmerSummary.total)} />
+          <MetricCard label="Pending approval" value={String(farmerSummary.pending)} />
+          <MetricCard label="Active farmers" value={String(farmerSummary.active)} />
         </section>
 
         <GlassCard>
@@ -251,8 +289,75 @@ export default function AgentDashboardPage() {
             </div>
           </CardContent>
         </GlassCard>
+
+        <GlassCard>
+          <CardHeader>
+            <CardTitle>Your Farmers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isFarmersLoading ? (
+              <p className="text-sm text-slate-500">Loading your farmers...</p>
+            ) : farmers.length === 0 ? (
+              <p className="text-sm text-slate-500">No farmers onboarded yet.</p>
+            ) : (
+              <div className="overflow-hidden rounded-3xl border border-border/60">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border/60 bg-white text-left">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Username</th>
+                        <th className="px-4 py-3">Full name</th>
+                        <th className="px-4 py-3">Phone</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Onboarding</th>
+                        <th className="px-4 py-3">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {farmers.map((farmer) => (
+                        <tr key={farmer.userId} className="text-sm text-slate-700">
+                          <td className="px-4 py-4 font-semibold text-slate-950">{farmer.username}</td>
+                          <td className="px-4 py-4">{farmer.profile?.fullName || "-"}</td>
+                          <td className="px-4 py-4">{farmer.phone}</td>
+                          <td className="px-4 py-4">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                              {farmer.agentCreatedPendingApproval
+                                ? "Pending approval"
+                                : farmer.isActive
+                                  ? "Active"
+                                  : "Inactive"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            {farmer.onboardingCompleted
+                              ? "Completed"
+                              : `Step ${farmer.onboarding?.currentStep || 1}`}
+                          </td>
+                          <td className="px-4 py-4">
+                            {farmer.createdAt ? new Date(farmer.createdAt).toLocaleDateString() : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </GlassCard>
       </div>
     </AppLayout>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <GlassCard>
+      <CardContent className="p-5">
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+        <p className="mt-2 text-3xl font-semibold text-slate-950">{value}</p>
+      </CardContent>
+    </GlassCard>
   );
 }
 

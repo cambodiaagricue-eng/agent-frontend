@@ -14,6 +14,27 @@ export type ApiEnvelope<T> = {
   data: T;
 };
 
+export type AgentFarmerRow = {
+  userId: string;
+  username: string;
+  phone: string;
+  memberQrCode?: string;
+  isActive: boolean;
+  onboardingCompleted: boolean;
+  agentCreatedPendingApproval: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  profile?: {
+    fullName?: string | null;
+    address?: string | null;
+    gender?: string | null;
+    age?: number | null;
+  } | null;
+  onboarding?: {
+    currentStep?: number;
+  } | null;
+};
+
 type AuthUser = {
   id: string;
   username: string;
@@ -156,5 +177,12 @@ export async function agentOnboardFarmer(
     method: "POST",
     authToken: accessToken,
     body,
+  });
+}
+
+export async function listAgentFarmers(accessToken: string) {
+  return request<ApiEnvelope<AgentFarmerRow[]>>("/agent/farmers", {
+    method: "GET",
+    authToken: accessToken,
   });
 }
