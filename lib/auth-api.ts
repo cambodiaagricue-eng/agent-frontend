@@ -3,7 +3,7 @@
 import type { User } from "./types";
 
 const RAW_API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://user-backend-1-3d6q.onrender.com";
 
 const API_ROOT = RAW_API_BASE_URL.replace(/\/+$/, "");
 const API_V1 = `${API_ROOT}/api/v1`;
